@@ -5,3 +5,5 @@ An addin for ArcCatalog featuring:
   * Files, folders, geodatabases, feature datasets, etc., will be opened up and subitems scanned.
   * Feature classes, rasters, shapefiles, etc., will have the thumbnail updated with the current preview image.
   * Other file types will be skipped.
+
+Solution is optimized for ArcGIS 10.0, Visual Studio 2010
