@@ -1,0 +1,27 @@
+﻿<ESRI.Configuration xmlns="http://schemas.esri.com/Desktop/AddIns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Name>CatalogTools</Name>
+  <AddInID>{64465357-4f0c-4963-804e-ec04670bbb9e}</AddInID>
+  <Description>ArcCatalog tools for developers</Description>
+  <Version>1.0</Version>
+  <Image>Images\CatalogTools.png</Image>
+  <Author>Jon Morris</Author>
+  <Company>Getech Group plc</Company>
+  <Date>12/9/2015</Date>
+  <Targets>
+    <Target name="Desktop" version="10.0" />
+  </Targets>
+  <AddIn language="CLR" library="CatalogTools.dll" namespace="CatalogTools">
+    <ArcCatalog>
+      <Commands>
+        <Button id="Getech_plc_CatalogTools_ThumbnailButton" class="ThumbnailButton" message="Generate Thumbnails" caption="Generate Thumbnails" tip="Generate thumbnails for selected datasets" category="Add-In Controls" image="Images\ThumbnailButton.png" onDemand="false" />
+      </Commands>
+      <Toolbars>
+        <Toolbar id="Getech_Group_plc_CatalogTools_Toolbar" caption="Catalog Tools" showInitially="true">
+          <Items>
+            <Button refID="Getech_plc_CatalogTools_ThumbnailButton" />
+          </Items>
+        </Toolbar>
+      </Toolbars>
+    </ArcCatalog>
+  </AddIn>
+</ESRI.Configuration>
