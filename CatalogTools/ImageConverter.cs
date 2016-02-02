@@ -37,17 +37,20 @@ namespace CatalogTools
             // create new bitmap
             int w = image.Width;
             int h = image.Height;
-            Bitmap b = new Bitmap(w, h);
-            Graphics g = Graphics.FromImage(b);
+            using (Bitmap b = new Bitmap(w, h))
+            {
+                using (Graphics g = Graphics.FromImage(b))
+                {
+                    // draw a white background
+                    g.FillRectangle(Brushes.White, 0, 0, w, h);
 
-            // draw a white background
-            g.FillRectangle(Brushes.White, 0, 0, w, h);
+                    // draw the input image over the top
+                    g.DrawImage(image, 0, 0, w, h);
 
-            // draw the input image over the top
-            g.DrawImage(image, 0, 0, w, h);
-
-            // convert to stdole.IPicture
-            return (IPicture)GetIPictureFromPicture(b);
+                    // convert to stdole.IPicture
+                    return (IPicture)GetIPictureFromPicture(b);
+                }
+            }
         }
     }
 }

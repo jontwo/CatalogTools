@@ -28,20 +28,26 @@ using ESRI.ArcGIS.esriSystem;
 
 namespace CatalogTools
 {
-    public partial class ProgressForm : Form
+    public partial class CreateThumbnailForm : Form
     {
         private bool cancelled;
         private IGxApplication GxApplication = null;
         private enum CatalogViewTab { Contents, Preview, Metadata };
         private ITrackCancel trackCancel = null;
+        private Utilities _utils = null;
+        private int thumbCount = 0;
 
-        public ProgressForm()
+        public CreateThumbnailForm()
         {
             InitializeComponent();
+
+            _utils = new Utilities();
 
             // an attempt to use a cancel tracker but it doesn't really work
             cancelled = false;
             trackCancel = new TrackCancel();
+
+            this.Focus();
 
             try
             {
@@ -51,6 +57,9 @@ namespace CatalogTools
             {
                 AddText(string.Format("Error: {0}. {1}", ex.Message, ex.StackTrace));
             }
+
+            if (thumbCount > 0)
+                AddText(string.Format("{0} thumbnails created", thumbCount));
 
             if (!cancelled && trackCancel.Continue())
                 AddText("Done");
@@ -124,11 +133,11 @@ namespace CatalogTools
                 if (cancelled || !trackCancel.Continue())
                     return;
 
-                HandleSelectedObject(gxObj);
+                HandleAndReleaseSelectedObject(gxObj);
             }
         }
 
-        private void HandleSelectedObject(IGxObject gxObj)
+        private void HandleAndReleaseSelectedObject(IGxObject gxObj)
         {
             // make sure object is really selected (i.e. multiple selections in contents view)
             if (!gxObj.FullName.Equals(GxApplication.Selection.Location.FullName))
@@ -146,7 +155,7 @@ namespace CatalogTools
                 IGxObject gxChild = enumGxObj.Next();
                 while (gxChild != null)
                 {
-                    HandleSelectedObject(gxChild);
+                    HandleAndReleaseSelectedObject(gxChild);
                     gxChild = enumGxObj.Next();
                 }
             }
@@ -156,15 +165,17 @@ namespace CatalogTools
                 gxObj.Category == "File Geodatabase Raster Dataset")
             {
                 // object is a dataset - update the thumbnail
-                Bitmap newThumb = CreateThumbnailForSelectedObject();
-
-                if (newThumb == null)
-                    return;
-
-                // convert to stdole.Picture and update current thumbnail
-                IGxDataset gxDs = (IGxDataset)gxObj;
-                IGxThumbnail gxThumb = (IGxThumbnail)gxDs;
-                gxThumb.Thumbnail = ImageConverter.ConvertBitmapToIPicture(newThumb);
+                using (Bitmap newThumb = CreateThumbnailForSelectedObject())
+                {
+                    if (newThumb != null)
+                    {
+                        // convert to stdole.Picture and update current thumbnail
+                        IGxDataset gxDs = (IGxDataset)gxObj;
+                        IGxThumbnail gxThumb = (IGxThumbnail)gxDs;
+                        gxThumb.Thumbnail = ImageConverter.ConvertBitmapToIPicture(newThumb);
+                        thumbCount++;
+                    }
+                }
             }
             //else if (gxObj.Category == "Map Document")
             //{
@@ -182,16 +193,18 @@ namespace CatalogTools
             //}
             else if (gxObj.Category == "Layer")
             {
-                // object is a map - update the thumbnail
-                Bitmap newThumb = CreateThumbnailForSelectedObject();
-
-                if (newThumb == null)
-                    return;
-
-                // convert to stdole.Picture and update current thumbnail
-                IGxLayer gxLayer = (IGxLayer)gxObj;
-                IGxThumbnail gxThumb = (IGxThumbnail)gxLayer;
-                gxThumb.Thumbnail = ImageConverter.ConvertBitmapToIPicture(newThumb);
+                // object is a layer - update the thumbnail
+                using (Bitmap newThumb = CreateThumbnailForSelectedObject())
+                {
+                    if (newThumb != null)
+                    {
+                        // convert to stdole.Picture and update current thumbnail
+                        IGxLayer gxLayer = (IGxLayer)gxObj;
+                        IGxThumbnail gxThumb = (IGxThumbnail)gxLayer;
+                        gxThumb.Thumbnail = ImageConverter.ConvertBitmapToIPicture(newThumb);
+                        thumbCount++;
+                    }
+                }
             }
             else if (gxObj.Category == "File Geodatabase Table" ||
                 gxObj.Category == "File Geodatabase Relationship Class" ||
@@ -203,8 +216,18 @@ namespace CatalogTools
             else
                 AddText(string.Format("Object {0} is unknown category {1}", gxObj.BaseName, gxObj.Category));
 
-            // force cleanup of out-of-scope items (e.g. bitmaps)
+            // release resources for current object
+            System.Diagnostics.Debug.WriteLine(string.Format("Memory before release {0}", System.Diagnostics.Process.GetCurrentProcess().WorkingSet64));
+            int toRelease = 0;
+            do
+            {
+                toRelease = System.Runtime.InteropServices.Marshal.ReleaseComObject(gxObj);
+            }
+            while (toRelease > 0);
+            gxObj = null;
+            System.Diagnostics.Debug.WriteLine(string.Format("After release {0}", System.Diagnostics.Process.GetCurrentProcess().WorkingSet64));
             GC.Collect();
+            System.Diagnostics.Debug.WriteLine(string.Format("After GC {0}", System.Diagnostics.Process.GetCurrentProcess().WorkingSet64));
         }
 
         private Bitmap CreateThumbnailForSelectedObject()
@@ -215,7 +238,7 @@ namespace CatalogTools
             // make sure preview tab is Geographic view, not Table view
             IGxPreview gxPreview = (IGxPreview)GxApplication.View;
             UID uid = new UIDClass();
-            uid.Value = "{B1DE27B0-D892-11D1-AA81-064342000000}";
+            uid.Value = "esriCatalogUI.GxGeoGraphicView";  // aka "{B1DE27B0-D892-11D1-AA81-064342000000}";
             gxPreview.ViewClassID = uid;
             IGxGeographicView2 gxGeogView = (IGxGeographicView2)gxPreview.View;
 
@@ -227,35 +250,39 @@ namespace CatalogTools
             if (activeView == null)
                 return null;
 
+            // make sure image has been drawn
+            activeView.Refresh();
+
             // get export bounds to determine export image size
             tagRECT exportFrame = activeView.ExportFrame;
             int imageWidth = Math.Abs(exportFrame.right - exportFrame.left);
             int imageHeight = Math.Abs(exportFrame.top - exportFrame.bottom);
-            
+
+            // check there is something to export
+            if (imageHeight == 0 && imageWidth == 0)
+                return null;
+
             // create bitmap and output view to it
             Bitmap outBMP = new Bitmap(imageWidth, imageHeight);
-            Graphics g = Graphics.FromImage(outBMP);
+            using (Graphics g = Graphics.FromImage(outBMP))
+            {
+                int gDC = g.GetHdc().ToInt32();
+                // have to do it twice because sometimes it outputs before drawing is complete
+                // maybe second output uses cached image?
+                activeView.Output(gDC, 0, ref exportFrame, null, trackCancel);
+                activeView.Output(gDC, 0, ref exportFrame, null, trackCancel);
 
-            int gDC = g.GetHdc().ToInt32();
-            // have to do it twice because sometimes it outputs before drawing is complete
-            // maybe second output uses cached image?
-            activeView.Output(gDC, 0, ref exportFrame, null, trackCancel);
-            activeView.Output(gDC, 0, ref exportFrame, null, trackCancel);
+                g.ReleaseHdc();
 
-            g.ReleaseHdc();
-
-#if DEBUG
-            outBMP.Save(@"c:\temp\map.png", System.Drawing.Imaging.ImageFormat.Png);
-#endif
-
-            return outBMP;
+                return outBMP;
+            }
         }
 
         private void AddText(string msg)
         {
             txtInfo.AppendText(msg);
             txtInfo.AppendText("\n");
-            System.Diagnostics.Debug.WriteLine(msg);
+            _utils.WriteDebug(msg);
         }
 
         private void btnCancel_Click(object sender, EventArgs e)

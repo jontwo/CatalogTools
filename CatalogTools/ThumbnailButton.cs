@@ -33,9 +33,9 @@ namespace CatalogTools
 
             try
             {
-                ProgressForm progForm = new ProgressForm();
-                progForm.ShowDialog();
-                progForm.Dispose();
+                CreateThumbnailForm thumbnailForm = new CreateThumbnailForm();
+                thumbnailForm.ShowDialog();
+                thumbnailForm.Dispose();
             }
             catch (Exception ex)
             {
