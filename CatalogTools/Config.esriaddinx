@@ -2,7 +2,7 @@
   <Name>CatalogTools</Name>
   <AddInID>{64465357-4f0c-4963-804e-ec04670bbb9e}</AddInID>
   <Description>ArcCatalog tools for developers</Description>
-  <Version>1.0</Version>
+  <Version>1.1</Version>
   <Image>Images\CatalogTools.png</Image>
   <Author>Jon Morris</Author>
   <Company>Getech Group plc</Company>
