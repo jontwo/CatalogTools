@@ -60,11 +60,13 @@ namespace CatalogTools
                 AddText(string.Format("Error: {0}. {1}", ex.Message, ex.StackTrace));
             }
 
-            if (thumbCount > 0)
-                AddText(string.Format("{0} thumbnails created", thumbCount));
-
             if (!cancelled && Utilities.Continue())
                 AddText("Done");
+            else
+                AddText("Cancelled");
+
+            if (thumbCount > 0)
+                AddText(string.Format("{0} thumbnails created", thumbCount));
 
             // change cancel button into a close button
             cancelled = true;
