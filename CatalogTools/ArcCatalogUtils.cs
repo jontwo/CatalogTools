@@ -18,9 +18,7 @@
  */
 
 using System;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Windows.Forms;
 using ESRI.ArcGIS.Carto;
 using ESRI.ArcGIS.Catalog;
 using ESRI.ArcGIS.CatalogUI;
@@ -28,53 +26,37 @@ using ESRI.ArcGIS.esriSystem;
 
 namespace CatalogTools
 {
-    public partial class CreateThumbnailForm : Form
+    class ArcCatalogUtils
     {
-        private bool cancelled;
         private IGxApplication GxApplication = null;
-        private enum CatalogViewTab { Contents, Preview, Metadata };
-        private Utilities _utils = null;
+        internal enum CatalogViewTab { Contents, Preview, Metadata };
+        private CreateThumbnailForm parentForm = null;
         private int thumbCount = 0;
 
-        public CreateThumbnailForm()
+        public int ThumbCount
         {
-            InitializeComponent();
-
-            _utils = new Utilities();
-
-            // reset cancel tracker
-            cancelled = false;
-            Utilities.TrackCancel = new TrackCancel();
-
-            CreateThumbnails();
+            get { return thumbCount; }
+            set { thumbCount = value; }
         }
 
-        private void CreateThumbnails()
+        public ArcCatalogUtils()
         {
-            this.Focus();
+            InitializeUtils();
+        }
 
-            try
-            {
-                GetSelectedDatasets();
-            }
-            catch (Exception ex)
-            {
-                AddText(string.Format("Error: {0}. {1}", ex.Message, ex.StackTrace));
-            }
+        public ArcCatalogUtils(CreateThumbnailForm form)
+        {
+            parentForm = form;
+            InitializeUtils();
+        }
 
-            if (thumbCount > 0)
-                AddText(string.Format("{0} thumbnails created", thumbCount));
-
-            if (!cancelled && Utilities.Continue())
-                AddText("Done");
-
-            // change cancel button into a close button
-            cancelled = true;
-            btnCancel.Text = "Close";
+        private void InitializeUtils()
+        {
+            GxApplication = (IGxApplication)ArcCatalog.Application;
         }
 
         // change tab if it is not changed already
-        private void SwitchTab(CatalogViewTab view)
+        internal void SwitchTab(CatalogViewTab view)
         {
             UID uid = new UIDClass();
             switch (view)
@@ -103,45 +85,7 @@ namespace CatalogTools
             }
         }
 
-        private void GetSelectedDatasets()
-        {
-            GxApplication = (IGxApplication)ArcCatalog.Application;
-            IGxSelection gxSel = GxApplication.Selection;
-
-            // gather all the selected objects in to a list so selection can be changed while processing
-            List<IGxObject> selectedObjs = new List<IGxObject>();
-            if (gxSel.Count > 0)
-            {
-                AddText(string.Format("{0} items selected", gxSel.Count));
-
-                IEnumGxObject enumGxObj = GxApplication.Selection.SelectedObjects;
-                enumGxObj.Reset();
-                IGxObject gxObj = enumGxObj.Next();
-                while (gxObj != null)
-                {
-                    selectedObjs.Add(gxObj);
-                    gxObj = enumGxObj.Next();
-                }
-            }
-            else
-            {
-                System.Diagnostics.Debug.WriteLine(string.Format("Item selected in tree view {0}", GxApplication.SelectedObject.FullName));
-                selectedObjs.Add(GxApplication.SelectedObject);
-            }
-
-            // iterate through selected objects
-            foreach (IGxObject gxObj in selectedObjs)
-            {
-                // form is often unresponsive while processing but try and cancel anyway
-                this.BringToFront();
-                if (cancelled || !Utilities.Continue())
-                    return;
-
-                HandleAndReleaseSelectedObject(gxObj);
-            }
-        }
-
-        private void HandleAndReleaseSelectedObject(IGxObject gxObj)
+        internal void HandleAndReleaseSelectedObject(IGxObject gxObj)
         {
             // make sure object is really selected (i.e. multiple selections in contents view)
             if (!gxObj.FullName.Equals(GxApplication.Selection.Location.FullName))
@@ -159,7 +103,11 @@ namespace CatalogTools
                 IGxObject gxChild = enumGxObj.Next();
                 while (gxChild != null)
                 {
-                    HandleAndReleaseSelectedObject(gxChild);
+                    ArcCatalogUtils catUtils = new ArcCatalogUtils(parentForm);
+                    catUtils.HandleAndReleaseSelectedObject(gxChild);
+                    thumbCount += catUtils.ThumbCount;
+                    if (!Utilities.Continue())
+                        break;
                     gxChild = enumGxObj.Next();
                 }
             }
@@ -273,8 +221,8 @@ namespace CatalogTools
                 int gDC = g.GetHdc().ToInt32();
                 // have to do it twice because sometimes it outputs before drawing is complete
                 // maybe second output uses cached image?
-                activeView.Output(gDC, 0, ref exportFrame, null, trackCancel);
-                activeView.Output(gDC, 0, ref exportFrame, null, trackCancel);
+                activeView.Output(gDC, 0, ref exportFrame, null, Utilities.TrackCancel);
+                activeView.Output(gDC, 0, ref exportFrame, null, Utilities.TrackCancel);
 
                 g.ReleaseHdc();
 
@@ -284,26 +232,8 @@ namespace CatalogTools
 
         private void AddText(string msg)
         {
-            txtInfo.AppendText(msg);
-            txtInfo.AppendText("\n");
-            _utils.WriteDebug(msg);
-        }
-
-        private void btnCancel_Click(object sender, EventArgs e)
-        {
-            if (cancelled)
-                this.Close();
-            else
-            {
-                cancelled = true;
-                Utilities.Cancel();
-            }
-        }
-
-        private void ProgressForm_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.KeyCode == Keys.Escape)
-                Utilities.Cancel();
+            if (parentForm != null)
+                parentForm.AddText(msg);
         }
     }
 }

@@ -14,11 +14,13 @@
     <ArcCatalog>
       <Commands>
         <Button id="Getech_plc_CatalogTools_ThumbnailButton" class="ThumbnailButton" message="Generate Thumbnails" caption="Generate Thumbnails" tip="Generate thumbnails for selected datasets" category="Add-In Controls" image="Images\ThumbnailButton.png" onDemand="false" />
+        <Button id="Getech_plc_CatalogTools_CancelButton" class="CancelButton" message="Cancel Thumbnail Generation" caption="Cancel Thumbnails" tip="Stop generating thumbnails" category="Add-In Controls" image="Images\Cancel32.png" onDemand="false" />
       </Commands>
       <Toolbars>
         <Toolbar id="Getech_Group_plc_CatalogTools_Toolbar" caption="Catalog Tools" showInitially="true">
           <Items>
             <Button refID="Getech_plc_CatalogTools_ThumbnailButton" />
+            <Button refID="Getech_plc_CatalogTools_CancelButton" />
           </Items>
         </Toolbar>
       </Toolbars>
