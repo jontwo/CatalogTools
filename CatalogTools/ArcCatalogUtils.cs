@@ -167,19 +167,6 @@ namespace CatalogTools
                 AddText(string.Format("Cannot create thumbnail for {0} {1}", gxObj.Category, gxObj.BaseName));
             else
                 AddText(string.Format("Object {0} is unknown category {1}", gxObj.BaseName, gxObj.Category));
-
-            // release resources for current object
-            System.Diagnostics.Debug.WriteLine(string.Format("Memory before release {0}", System.Diagnostics.Process.GetCurrentProcess().WorkingSet64));
-            int toRelease = 0;
-            do
-            {
-                toRelease = System.Runtime.InteropServices.Marshal.ReleaseComObject(gxObj);
-            }
-            while (toRelease > 0);
-            gxObj = null;
-            System.Diagnostics.Debug.WriteLine(string.Format("After release {0}", System.Diagnostics.Process.GetCurrentProcess().WorkingSet64));
-            GC.Collect();
-            System.Diagnostics.Debug.WriteLine(string.Format("After GC {0}", System.Diagnostics.Process.GetCurrentProcess().WorkingSet64));
         }
 
         private Bitmap CreateThumbnailForSelectedObject()
