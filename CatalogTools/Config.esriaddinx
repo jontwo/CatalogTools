@@ -2,11 +2,11 @@
   <Name>CatalogTools</Name>
   <AddInID>{64465357-4f0c-4963-804e-ec04670bbb9e}</AddInID>
   <Description>ArcCatalog tools for developers</Description>
-  <Version>1.1</Version>
+  <Version>1.2</Version>
   <Image>Images\CatalogTools.png</Image>
   <Author>Jon Morris</Author>
   <Company>Getech Group plc</Company>
-  <Date>12/9/2015</Date>
+  <Date>6/2/2016</Date>
   <Targets>
     <Target name="Desktop" version="10.0" />
   </Targets>
@@ -24,6 +24,11 @@
           </Items>
         </Toolbar>
       </Toolbars>
+      <Extensions>
+        <Extension id="Getech_Group_plc_CatalogTools_CatalogToolsExtension" class="CatalogToolsExtension" productName="Catalog Tools">
+          <Description>Tools for ArcCatalog</Description>
+        </Extension>
+      </Extensions>
     </ArcCatalog>
   </AddIn>
 </ESRI.Configuration>

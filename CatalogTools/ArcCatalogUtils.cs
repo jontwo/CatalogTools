@@ -18,7 +18,9 @@
  */
 
 using System;
+using System.Collections.Generic;
 using System.Drawing;
+using ESRI.ArcGIS.ADF;
 using ESRI.ArcGIS.Carto;
 using ESRI.ArcGIS.Catalog;
 using ESRI.ArcGIS.CatalogUI;
@@ -28,20 +30,55 @@ namespace CatalogTools
 {
     class ArcCatalogUtils
     {
-        private IGxApplication GxApplication = null;
+        private IGxApplication GxApplication;
         internal enum CatalogViewTab { Contents, Preview, Metadata };
-        private CreateThumbnailForm parentForm = null;
-        private int thumbCount = 0;
-
-        public int ThumbCount
+        private CreateThumbnailForm parentForm;
+        private ComReleaser releaser;
+        public Dictionary<string, string> knownCategories = new Dictionary<string, string>()
         {
-            get { return thumbCount; }
-            set { thumbCount = value; }
-        }
+            {"Folder", "Container"},
+            {"Folder Connection", "Container"},
+            {"File Geodatabase", "Container"},
+            {"File Geodatabase Feature Dataset", "Container"},
+            {"Personal Geodatabase", "Container"},
+            {"Personal Geodatabase Feature Dataset", "Container"},
+            {"SDE Feature Dataset", "Container"},
+            {"Spatial Database Connection", "Container"},
+            {"Raster Dataset", "Dataset"},
+            {"Shapefile", "Dataset"},
+            {"File Geodatabase Feature Class", "Dataset"},
+            {"File Geodatabase Raster Dataset", "Dataset"},
+            {"Personal Geodatabase Feature Class", "Dataset"},
+            {"Personal Geodatabase Raster Dataset", "Dataset"},
+            {"SDE Feature Class", "Dataset"},
+            {"SDE Raster Dataset", "Dataset"},
+            {"Layer", "Dataset"},
+            {"Coordinate System", "Other"},
+            {"ESRI AddIn", "Other"},
+            {"File Geodatabase Table", "Other"},
+            {"Personal Geodatabase Table", "Other"},
+            {"SDE Table", "Other"},
+            {"File Geodatabase Relationship Class", "Other"},
+            {"Personal Geodatabase Relationship Class", "Other"},
+            {"SDE Relationship Class", "Other"},
+            {"Globe Document", "Other"},
+            {"Map Document", "Other"},
+            {"Map Template", "Other"},
+            {"XML Document", "Other"},
+            {"Map Package", "Other"},
+            {"Text File", "Other"},
+            {"Toolbox", "Other"}
+        };
 
         public ArcCatalogUtils()
         {
             InitializeUtils();
+        }
+
+        ~ArcCatalogUtils()
+        {
+            if (releaser != null)
+                releaser.Dispose();
         }
 
         public ArcCatalogUtils(CreateThumbnailForm form)
@@ -53,6 +90,34 @@ namespace CatalogTools
         private void InitializeUtils()
         {
             GxApplication = (IGxApplication)ArcCatalog.Application;
+            releaser = new ComReleaser();
+        }
+
+        public bool IsContainer(string item)
+        {
+            if (knownCategories.ContainsKey(item))
+                if (knownCategories[item].Equals("Container"))
+                    return true;
+
+            return false;
+        }
+
+        public bool IsDataset(string item)
+        {
+            if (knownCategories.ContainsKey(item))
+                if (knownCategories[item].Equals("Dataset"))
+                    return true;
+
+            return false;
+        }
+
+        public bool IsOther(string item)
+        {
+            if (knownCategories.ContainsKey(item))
+                if (knownCategories[item].Equals("Other"))
+                    return true;
+
+            return false;
         }
 
         // change tab if it is not changed already
@@ -85,36 +150,28 @@ namespace CatalogTools
             }
         }
 
-        internal void HandleAndReleaseSelectedObject(IGxObject gxObj)
+        internal void CreateThumbnailForNamedObject(string name)
         {
-            // make sure object is really selected (i.e. multiple selections in contents view)
-            if (!gxObj.FullName.Equals(GxApplication.Selection.Location.FullName))
-                GxApplication.Selection.SetLocation(gxObj, null);
+            IGxObject gxObj = SelectObjectByName(name);
+            if (gxObj == null)
+                return;
 
             // determine selected object type
-            if (gxObj.Category == "Folder" ||
-                gxObj.Category == "File Geodatabase" ||
-                gxObj.Category == "File Geodatabase Feature Dataset")
+            if (gxObj.Category == "Layer")
             {
-                AddText(string.Format("Finding datasets in {0}", gxObj.BaseName));
-                IGxObjectContainer gxObjContainer = (IGxObjectContainer)gxObj;
-                IEnumGxObject enumGxObj = gxObjContainer.Children;
-                enumGxObj.Reset();
-                IGxObject gxChild = enumGxObj.Next();
-                while (gxChild != null)
+                // object is a layer - update the thumbnail
+                using (Bitmap newThumb = CreateThumbnailForSelectedObject())
                 {
-                    ArcCatalogUtils catUtils = new ArcCatalogUtils(parentForm);
-                    catUtils.HandleAndReleaseSelectedObject(gxChild);
-                    thumbCount += catUtils.ThumbCount;
-                    if (!Utilities.Continue())
-                        break;
-                    gxChild = enumGxObj.Next();
+                    if (newThumb != null)
+                    {
+                        // convert to stdole.Picture and update current thumbnail
+                        IGxLayer gxLayer = (IGxLayer)gxObj;
+                        IGxThumbnail gxThumb = (IGxThumbnail)gxLayer;
+                        gxThumb.Thumbnail = ImageConverter.ConvertBitmapToIPicture(newThumb);
+                    }
                 }
             }
-            else if (gxObj.Category == "Raster Dataset" ||
-                gxObj.Category == "Shapefile" ||
-                gxObj.Category == "File Geodatabase Feature Class" ||
-                gxObj.Category == "File Geodatabase Raster Dataset")
+            else if (IsDataset(gxObj.Category))
             {
                 // object is a dataset - update the thumbnail
                 using (Bitmap newThumb = CreateThumbnailForSelectedObject())
@@ -125,7 +182,6 @@ namespace CatalogTools
                         IGxDataset gxDs = (IGxDataset)gxObj;
                         IGxThumbnail gxThumb = (IGxThumbnail)gxDs;
                         gxThumb.Thumbnail = ImageConverter.ConvertBitmapToIPicture(newThumb);
-                        thumbCount++;
                     }
                 }
             }
@@ -143,35 +199,45 @@ namespace CatalogTools
             //    IGxThumbnail gxThumb = (IGxThumbnail)gxMap;
             //    gxThumb.Thumbnail = ImageConverter.ConvertBitmapToIPicture(newThumb);
             //}
-            else if (gxObj.Category == "Layer")
+            else
+                AddText(string.Format("Cannot create thumbnail for {0} {1}", gxObj.Category, gxObj.BaseName));
+        }
+
+        internal IGxObject SelectObjectByName(string fullName)
+        {
+            int objCount;
+            try
             {
-                // object is a layer - update the thumbnail
-                using (Bitmap newThumb = CreateThumbnailForSelectedObject())
+                object foundObj = GxApplication.Catalog.GetObjectFromFullName(fullName, out objCount);
+                if (objCount > 1)
                 {
-                    if (newThumb != null)
+                    GxApplication.Selection.Clear(null);
+                    IEnumGxObject enumGxObj = (IEnumGxObject)foundObj;
+                    enumGxObj.Reset();
+                    IGxObject gxObj = enumGxObj.Next();
+                    while (gxObj != null)
                     {
-                        // convert to stdole.Picture and update current thumbnail
-                        IGxLayer gxLayer = (IGxLayer)gxObj;
-                        IGxThumbnail gxThumb = (IGxThumbnail)gxLayer;
-                        gxThumb.Thumbnail = ImageConverter.ConvertBitmapToIPicture(newThumb);
-                        thumbCount++;
+                        GxApplication.Selection.Select(gxObj, true, null);
+                        gxObj = enumGxObj.Next();
                     }
                 }
+                else if (foundObj != null)
+                {
+                    GxApplication.Selection.SetLocation((IGxObject)foundObj, null);
+                }
+                return GxApplication.SelectedObject;
             }
-            else if (gxObj.Category == "File Geodatabase Table" ||
-                gxObj.Category == "File Geodatabase Relationship Class" ||
-                gxObj.Category == "Map Document" ||
-                gxObj.Category == "XML Document" ||
-                gxObj.Category == "Map Package" ||
-                gxObj.Category == "Toolbox")
-                AddText(string.Format("Cannot create thumbnail for {0} {1}", gxObj.Category, gxObj.BaseName));
-            else
-                AddText(string.Format("Object {0} is unknown category {1}", gxObj.BaseName, gxObj.Category));
+            catch (Exception ex)
+            {
+                AddText(string.Format("{0}: {1}", ex.Message, ex.StackTrace));
+            }
+            return null;
         }
 
         private Bitmap CreateThumbnailForSelectedObject()
         {
             AddText(string.Format("Creating thumbnail for {0}", GxApplication.Selection.Location.BaseName));
+
             SwitchTab(CatalogViewTab.Preview);
 
             // make sure preview tab is Geographic view, not Table view

@@ -23,6 +23,8 @@ namespace CatalogTools
 {
     public class ThumbnailButton : ESRI.ArcGIS.Desktop.AddIns.Button
     {
+        private CreateThumbnailForm m_pThumbnailForm;
+
         public ThumbnailButton()
         {
         }
@@ -33,15 +35,26 @@ namespace CatalogTools
 
             try
             {
-                CreateThumbnailForm thumbnailForm = new CreateThumbnailForm();
-                thumbnailForm.ShowDialog();
-                thumbnailForm.Dispose();
+                // if it's the first click, create a new form
+                // otherwise just bring it to the front
+                if (m_pThumbnailForm == null || m_pThumbnailForm.IsDisposed)
+                {
+                    CatalogToolsExtension.WriteDebug("Opening CreateThumbnailForm");
+                    m_pThumbnailForm = new CreateThumbnailForm();
+                }
+
+                if (!m_pThumbnailForm.Visible)
+                {
+                    m_pThumbnailForm.Show();
+                }
+
+                m_pThumbnailForm.BringToFront();
+                m_pThumbnailForm.Focus();
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(string.Format("{0}: {1}", ex.Message, ex.StackTrace));
+                System.Windows.Forms.MessageBox.Show(string.Format("{0}\n{1}", ex.Message, ex.StackTrace));
             }
-
         }
 
         protected override void OnUpdate()
